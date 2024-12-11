@@ -10,7 +10,7 @@
   "scripts": {
     "tsup": "tsup",
     "build": "tsup",
-    "start": "tsx -r dotenv/config src/index.ts",
+    "start": "tsx -r dotenv/config src/flower.ts",
     "lint": "eslint src",
     "lint:fix": "npm run lint --fix",
     "format": "prettier --write \"**/*.ts\"",
@@ -29,8 +29,11 @@
   "dependencies": {
     "@langchain/community": "^0.3.17",
     "@langchain/core": "^0.3.22",
+    "@langchain/qdrant": "^0.1.1",
     "dotenv": "^16.0.3",
-    "langchain": "^0.0.39",
+    "langchain": "^0.3.6",
+    "openai": "^4.76.1",
+    "qdrant-client": "^0.0.1",
     "tsup": "^6.7.0"
   },
   "devDependencies": {
@@ -44,6 +47,8 @@
     "eslint-config-prettier": "^8.6.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-prettier": "^4.2.1",
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^1.1.1",
     "prettier": "^2.8.3",
     "tsx": "^3.12.3",
     "typescript": "^5.0.4"

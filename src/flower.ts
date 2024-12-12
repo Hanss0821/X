@@ -9,10 +9,10 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { DocxLoader } from "@langchain/community/document_loaders/fs/docx";
 import { TextLoader } from "langchain/document_loaders/fs/text";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { AlibabaTongyiEmbeddings } from "@langchain/community/embeddings/alibaba_tongyi";
 import { QdrantVectorStore } from "@langchain/qdrant";
-import { OpenAIEmbeddings } from "@langchain/openai";
-import QdrantClient from "qdrant-client";
-import axios from "axios";
+import { ChatAlibabaTongyi } from "@langchain/community/chat_models/alibaba_tongyi";
+import { RetrievalQAChain } from "langchain/chains";
 
 type documentType = PDFLoader | DocxLoader | TextLoader;
 type fileType = (typeof documents)[number];
@@ -26,8 +26,11 @@ const files = await getFiles();
 const documents = await loadFiles(files);
 // 分割文本
 const chunked_documents = await splitText(documents);
-await createQdrantVectorStore(chunked_documents);
-console.log(chunked_documents);
+const qdrantStore = await createQdrantVectorStore(chunked_documents);
+// 创建QA链
+const chain = createQAChain(qdrantStore, qwenTurbo);
+// 执行chat model
+init();
 
 function getFiles(): Promise<string[]> {
   const dirPath = path.resolve(__dirname, "./public/oneFlower");
@@ -85,37 +88,43 @@ async function splitText(documents: fileType[]) {
 
 // 创建向量数据库
 async function createQdrantVectorStore(chunksDocumnets: fileType[]) {
-  for (let i = 0; i < chunksDocumnets.length; i++) {
-    const chunk = chunksDocumnets[i];
-    const vectorData = await getVectorText(chunk.pageContent);
-    console.log(vectorData);
-  }
+  // 嵌入模型
+  const vectorStore = await QdrantVectorStore.fromDocuments(
+    chunksDocumnets,
+    new AlibabaTongyiEmbeddings(),
+    {
+      url: process.env.QDRANT_URL as string,
+      collectionName: "oneFlower",
+    }
+  );
+  return vectorStore;
 }
 
-// 获取向量文本
-function getVectorText(text: string) {
-  return new Promise((reslove, reject) => {
-    axios
-      .post(
-        process.env.ALIBABA_API_EMBEDDING as string,
-        {
-          model: "text-embedding-v2",
-          input: {
-            texts: [text],
-          },
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: process.env.ALIBABA_API_KEY,
-          },
-        }
-      )
-      .then((res) => {
-        reslove(res);
-      })
-      .catch((err) => {
-        reject(err);
-      });
+// 创建QA链
+function createQAChain(
+  vectorStore: QdrantVectorStore,
+  qwenTurbo: ChatAlibabaTongyi
+) {
+  const retriever = vectorStore.asRetriever();
+  const llm = qwenTurbo;
+  const chain = RetrievalQAChain.fromLLM(llm, retriever);
+  return chain;
+}
+
+async function chat(chain: RetrievalQAChain, question: string) {
+  const response = await chain.call({ query: question });
+  return response.text;
+}
+
+function init() {
+  console.log("Hello!");
+  process.stdin.on("data", (buffer) => {
+    const question = buffer.toString().trim();
+    if (question === "exit") {
+      process.exit();
+    }
+    chat(chain, question).then((res) => {
+      console.log(res);
+    });
   });
 }
